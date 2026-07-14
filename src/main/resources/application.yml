@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: route-search-api
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 500ms
+      # Short connect timeout so a missing Redis degrades quickly instead of hanging.
+      lettuce:
+        shutdown-timeout: 100ms
+
+server:
+  port: ${PORT:8080}
+
+route:
+  graph:
+    cities: classpath:graph/cities.dat
+    edges: classpath:graph/edges.dat
+  cache:
+    ttl-seconds: 3600
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    com.routesearch: INFO
