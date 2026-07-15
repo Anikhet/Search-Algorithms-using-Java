@@ -25,6 +25,11 @@ management:
     web:
       exposure:
         include: health,info
+  health:
+    # Redis is a non-critical cache: the API degrades gracefully and keeps
+    # serving when it is down, so it must not fail the overall health check.
+    redis:
+      enabled: false
 
 logging:
   level:

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
@@ -30,16 +31,16 @@ public class Pathfinder {
     public PathResult find(Algorithm algorithm, Graph graph, Vertex start, Vertex goal) {
         long begin = System.nanoTime();
         List<Vertex> path = switch (algorithm) {
-            case BFS -> bfs(graph, start, goal);
-            case DFS -> dfs(graph, start, goal);
-            case ASTAR -> astar(graph, start, goal);
+            case BFS -> bfs(start, goal);
+            case DFS -> dfs(start, goal);
+            case ASTAR -> astar(start, goal);
         };
         long micros = (System.nanoTime() - begin) / 1_000;
         return build(algorithm, start, goal, path, micros);
     }
 
     /** Breadth-first search: minimises the number of hops. */
-    private List<Vertex> bfs(Graph graph, Vertex start, Vertex goal) {
+    private List<Vertex> bfs(Vertex start, Vertex goal) {
         Queue<Vertex> queue = new ArrayDeque<>();
         Set<Vertex> visited = new HashSet<>();
         Map<Vertex, Vertex> parents = new HashMap<>();
@@ -63,7 +64,7 @@ public class Pathfinder {
     }
 
     /** Depth-first search: finds a path (not necessarily the shortest). */
-    private List<Vertex> dfs(Graph graph, Vertex start, Vertex goal) {
+    private List<Vertex> dfs(Vertex start, Vertex goal) {
         Deque<Vertex> stack = new ArrayDeque<>();
         Set<Vertex> visited = new HashSet<>();
         Map<Vertex, Vertex> parents = new HashMap<>();
@@ -93,7 +94,7 @@ public class Pathfinder {
      * distance from the start, h = straight-line distance to the goal (an
      * admissible heuristic, so the result is optimal).
      */
-    private List<Vertex> astar(Graph graph, Vertex start, Vertex goal) {
+    private List<Vertex> astar(Vertex start, Vertex goal) {
         Map<Vertex, Double> gScore = new HashMap<>();
         Map<Vertex, Vertex> parents = new HashMap<>();
         Set<Vertex> closed = new HashSet<>();
@@ -136,7 +137,7 @@ public class Pathfinder {
             node = parents.get(node);
         }
         path.add(start);
-        java.util.Collections.reverse(path);
+        Collections.reverse(path);
         return path;
     }
 

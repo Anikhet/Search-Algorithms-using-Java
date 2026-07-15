@@ -1,6 +1,7 @@
 package com.routesearch.model;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -39,7 +40,7 @@ public class Vertex {
     }
 
     public List<Vertex> getNeighbours() {
-        return neighbours;
+        return Collections.unmodifiableList(neighbours);
     }
 
     @Override

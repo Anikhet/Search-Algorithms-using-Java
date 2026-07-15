@@ -1,13 +1,13 @@
 package com.routesearch.model;
 
-import java.io.Serializable;
 import java.util.List;
 
 /**
  * Result of a pathfinding query. This is what gets serialized to JSON for the
- * API response and cached in Redis, so it must be a plain, serializable bean.
+ * API response and cached in Redis, so it must be a plain bean with getters,
+ * setters and a no-arg constructor for Jackson.
  */
-public class PathResult implements Serializable {
+public class PathResult {
 
     private String algorithm;
     private String from;
