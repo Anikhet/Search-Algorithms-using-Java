@@ -1,64 +1,50 @@
 # Route Search API
 
-A REST service exposing **BFS / DFS / A\*** pathfinding over a city graph, built
-with **Java 21**, **Spring Boot 3**, and **Redis** route caching.
+Find a route between two cities using BFS, DFS, or A\*, over an HTTP API.
+Java 21, Spring Boot 3, Redis for caching.
 
-Given a source and destination city, the API returns the route (ordered list of
-cities with coordinates), the number of hops, and the total travel distance in
-miles. Computed routes are cached in Redis so repeated queries are served
-without recomputation.
+You give it two cities and an algorithm; it gives you back the path, the number
+of hops, and the total distance in miles. Repeated queries are served from
+Redis instead of being recomputed.
 
-## Algorithms
+## Why three algorithms
 
-| Algorithm | Optimises for | Notes |
-|-----------|---------------|-------|
-| **BFS**   | Fewest hops   | Unweighted shortest path |
-| **DFS**   | Any path      | Explores depth-first; not distance-optimal |
-| **A\***   | Shortest travel distance | `g` = accumulated haversine distance, `h` = straight-line distance to goal (admissible ⇒ optimal) |
+They optimise for different things, and the responses show it:
 
-Distances use the **haversine** great-circle formula over each city's real
-latitude/longitude.
+- **BFS** — fewest hops. Ignores distance, so the route can be long in miles.
+- **DFS** — first path it stumbles into. Not shortest by any measure; included
+  mostly for contrast.
+- **A\*** — shortest actual distance. Cost so far is the great-circle distance
+  walked; the heuristic is the straight-line distance to the goal. That
+  heuristic never overshoots, so A\* is guaranteed to return an optimal route.
 
-## Tech stack
+Seattle → Boston is a good example: BFS returns 12 hops / 4163 mi, A\* returns
+13 hops but only 3678 mi.
 
-- Java 21, Spring Boot 3 (Spring Web, Actuator, Validation)
-- Spring Data Redis (Lettuce) for route caching, with graceful degradation when
-  Redis is unavailable
-- Maven build; Docker / Docker Compose for a one-command run
+## Run it
 
-## Running
-
-### With Docker Compose (app + Redis)
+With Docker (starts Redis too):
 
 ```bash
 docker compose up --build
 ```
 
-### Locally
+Or locally:
 
 ```bash
-# start Redis (optional — the API still works without it, just uncached)
-redis-server --daemonize yes
-
+redis-server --daemonize yes   # optional; without it, routes just aren't cached
 mvn spring-boot:run
 ```
 
-The service listens on `http://localhost:8080`.
+Either way the API is on `http://localhost:8080`.
 
-## API
+## Endpoints
 
-### `GET /api/routes`
-
-| Param       | Required | Default | Description |
-|-------------|----------|---------|-------------|
-| `from`      | yes      | —       | Source city |
-| `to`        | yes      | —       | Destination city |
-| `algorithm` | no       | `astar` | `bfs`, `dfs`, or `astar` |
-
-City names are matched case-insensitively.
+**`GET /api/routes`** — `from`, `to`, and optional `algorithm` (`bfs`, `dfs`,
+`astar`; defaults to `astar`). City names are case-insensitive.
 
 ```bash
-curl "http://localhost:8080/api/routes?from=Seattle&to=Boston&algorithm=astar"
+curl "localhost:8080/api/routes?from=Seattle&to=Boston&algorithm=astar"
 ```
 
 ```json
@@ -71,55 +57,52 @@ curl "http://localhost:8080/api/routes?from=Seattle&to=Boston&algorithm=astar"
   "totalDistanceMiles": 3677.58,
   "path": [
     { "city": "Seattle", "lat": 47.6062, "lon": -122.3321 },
-    { "city": "Portland", "lat": 45.5152, "lon": -122.6784 },
-    "..."
+    { "city": "Portland", "lat": 45.5152, "lon": -122.6784 }
   ],
   "computeTimeMicros": 1986,
   "cached": false
 }
 ```
 
-A second identical request returns `"cached": true`, served from Redis.
+Ask for the same route twice and the second response comes back with
+`"cached": true`.
 
-### `GET /api/cities`
+**`GET /api/cities`** — every city in the graph, with coordinates.
 
-Lists every city in the loaded graph with its coordinates.
-
-### `GET /actuator/health`
-
-Health check endpoint.
-
-## Configuration
-
-Set via environment variables or `src/main/resources/application.yml`:
-
-| Variable                  | Default   | Description |
-|---------------------------|-----------|-------------|
-| `REDIS_HOST`              | `localhost` | Redis host |
-| `REDIS_PORT`              | `6379`    | Redis port |
-| `PORT`                    | `8080`    | HTTP port |
-| `route.cache.ttl-seconds` | `3600`    | Cache TTL for routes |
+**`GET /actuator/health`** — health check. It stays `UP` even when Redis is
+down, because a missing cache doesn't stop the API from answering.
 
 ## The graph
 
-The city graph loads at startup from two whitespace-delimited resource files:
-
-- `src/main/resources/graph/cities.dat` — `<name> <lat> <lon>`
-- `src/main/resources/graph/edges.dat` — `<cityA> <cityB>` (undirected)
-
-Lines starting with `#` are comments. Point `route.graph.cities` /
-`route.graph.edges` at other files to swap in a different map.
-
-## Project structure
+Loaded once at startup from two files under `src/main/resources/graph/`:
 
 ```
-src/main/java/com/routesearch/
-├── model/    Vertex, Graph, GeoDistance, PathStep, PathResult
-├── graph/    GraphService — loads the graph at startup
-├── search/   Algorithm, Pathfinder (BFS/DFS/A*), RouteService
-├── cache/    RouteCacheService — Redis caching with graceful fallback
-├── config/   RedisConfig
-└── web/      RouteController, CityController, error handling
+cities.dat    Seattle  47.6062  -122.3321     # name  lat  lon
+edges.dat     Seattle  Portland               # undirected edge
+```
+
+`#` lines are comments. The bundled data is 25 US cities wired up along rough
+interstate lines. Point `route.graph.cities` / `route.graph.edges` at your own
+files to use a different map.
+
+## Config
+
+| Env var                   | Default     | |
+|---------------------------|-------------|-|
+| `REDIS_HOST`              | `localhost` | |
+| `REDIS_PORT`              | `6379`      | |
+| `PORT`                    | `8080`      | HTTP port |
+| `route.cache.ttl-seconds` | `3600`      | how long a cached route lives |
+
+## Layout
+
+```
+model/    Vertex, Graph, GeoDistance (haversine), PathStep, PathResult
+graph/    GraphService — reads the data files at startup
+search/   Pathfinder (the three algorithms), RouteService (cache-then-compute)
+cache/    RouteCacheService — Redis, falls back to recomputing on any error
+config/   RedisConfig
+web/      controllers + error handling
 ```
 
 ## Tests
@@ -128,6 +111,7 @@ src/main/java/com/routesearch/
 mvn test
 ```
 
-Unit tests cover each algorithm's contract: BFS minimises hops, A\* produces a
-connected shortest-distance path, DFS returns a valid path, zero-distance
-self-routes, and disconnected (not-found) cases.
+`PathfinderTest` checks each algorithm's contract on a small hand-built graph
+(BFS minimises hops, A\* stays optimal, self-routes are zero, disconnected
+cities report not-found). `RouteControllerTest` is a MockMvc slice over the
+HTTP layer — JSON shape, the default algorithm, and the 404/400 responses.
